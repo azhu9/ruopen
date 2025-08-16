@@ -82,7 +82,12 @@ export default function HomePage() {
             </h2>
             {meetings.map((meeting) => (
               <div key={meeting.id} className="meeting-card">
-                <h3>{meeting.course_title}</h3>
+                <h3>
+                  {meeting.course_title} ({meeting.credits})
+                </h3>
+                <p>
+                  <strong>Index:</strong> {meeting.section_index}
+                </p>
                 <p>
                   <strong>Course:</strong> {meeting.subject}:
                   {meeting.course_number}
