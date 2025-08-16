@@ -1,16 +1,17 @@
-"use client"; // This is crucial! It marks this as a Client Component.
+"use client";
 
 import { useState } from "react";
-import { supabase } from "../lib/supabaseClient"; // Import our client
-import { Meeting } from "../types"; // Import our custom type
+import { supabase } from "../lib/supabaseClient";
+import { Meeting } from "../types";
+import ScheduleView from "../components/ScheduleView"; // Import the new component
 
 export default function HomePage() {
-  // State management with TypeScript types
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [building, setBuilding] = useState<string>("");
   const [room, setRoom] = useState<string>("");
+  const [hasSearched, setHasSearched] = useState<boolean>(false); // Track if a search has been performed
 
   const searchSchedule = async () => {
     if (!building || !room) {
@@ -21,20 +22,19 @@ export default function HomePage() {
     try {
       setLoading(true);
       setError(null);
-      setMeetings([]); // Clear previous results
+      setMeetings([]);
+      setHasSearched(true); // Mark that a search was made
 
-      // The Supabase query is strongly typed
       const { data, error } = await supabase
         .from("class_meetings")
         .select("*")
-        .ilike("building_code", building.trim()) // Use .trim() to remove whitespace
+        .ilike("building_code", building.trim())
         .ilike("room_number", room.trim());
 
       if (error) {
-        throw error; // Let the catch block handle it
+        throw error;
       }
 
-      // If data is not null, update state, otherwise set to empty array
       setMeetings(data || []);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
@@ -47,7 +47,9 @@ export default function HomePage() {
   return (
     <main className="container">
       <header>
-        <h1>Rutgers Classroom Schedule Search</h1>
+        <h1 className="text-3xl font-bold">
+          Rutgers Classroom Schedule Search
+        </h1>
         <p>Find out when a class is taking place in a specific room.</p>
       </header>
 
@@ -75,37 +77,18 @@ export default function HomePage() {
         {loading && <p>Loading...</p>}
         {error && <p className="error-message">Error: {error}</p>}
 
-        {!loading && !error && meetings.length > 0 && (
-          <div className="meetings-list">
+        {/* --- Display logic updated to use the ScheduleView --- */}
+        {!loading && !error && hasSearched && (
+          <>
             <h2>
               Schedule for {building} - {room}
             </h2>
-            {meetings.map((meeting) => (
-              <div key={meeting.id} className="meeting-card">
-                <h3>
-                  {meeting.course_title} ({meeting.credits})
-                </h3>
-                <p>
-                  <strong>Index:</strong> {meeting.section_index}
-                </p>
-                <p>
-                  <strong>Course:</strong> {meeting.subject}:
-                  {meeting.course_number}
-                </p>
-                <p>
-                  <strong>Schedule:</strong> {meeting.meeting_day} from{" "}
-                  {meeting.start_time} to {meeting.end_time}
-                </p>
-                <p>
-                  <strong>Instructor:</strong> {meeting.instructors || "Staff"}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && !error && meetings.length === 0 && (
-          <p>No classes found for this location. Please start a new search.</p>
+            {meetings.length > 0 ? (
+              <ScheduleView meetings={meetings} />
+            ) : (
+              <p>No classes found for this location.</p>
+            )}
+          </>
         )}
       </div>
     </main>
