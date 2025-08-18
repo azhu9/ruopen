@@ -1,48 +1,24 @@
-/* --- 1. HIDE THE TOOLBAR BUTTONS --- */
-.rbc-toolbar .rbc-btn-group {
-    display: none !important;
+/* --- Hide Sunday (1st day after gutter) --- */
+.rbc-time-content .rbc-day-slot:nth-child(2),
+.rbc-time-header .rbc-header:first-child {
+  display: none !important;
 }
 
-/* --- 2. HIDE SATURDAY AND SUNDAY COLUMNS --- */
-
-/* --- HEADER FIX --- */
-/* Hide the header for Sunday, which is the SECOND child after the time gutter. */
-.rbc-time-header .rbc-header:nth-child(2) {
-    display: none;
-}
-/* Hide the header for Saturday, which is the LAST child. */
+/* --- Hide Saturday (last column) --- */
+.rbc-time-content .rbc-day-slot:last-child,
 .rbc-time-header .rbc-header:last-child {
-    display: none;
+  display: none !important;
 }
 
-/* --- CONTENT FIX --- */
-/* Hide the content area for Sunday (the slot right after the gutter). */
-.rbc-time-content > .rbc-time-gutter + .rbc-day-slot {
-    display: none;
-}
-/* Hide the content area for Saturday (the last day slot). */
-.rbc-time-content > .rbc-day-slot:last-child {
-    display: none;
-}
-
-
-/* --- 3. FIX THE GRID: MAKE 5 WEEKDAYS FILL THE SPACE --- */
-/* This rule is now more effective because the correct columns are hidden. */
+/* --- Make remaining 5 weekdays (Mon–Fri) fit evenly --- */
 .rbc-time-header .rbc-header,
 .rbc-time-content .rbc-day-slot {
-    flex-basis: 20% !important;
-    max-width: 20% !important;
+  flex-basis: 20% !important;
+  max-width: 20% !important;
 }
 
-
-/* --- 4. MAKE TEXT INSIDE EVENT BLOCKS SMALLER --- */
-.rbc-event, .rbc-event-content {
-    font-size: 12px !important;
-    line-height: 1.2 !important;
-}
-
-/* --- NEW: HIDE THE ALL-DAY EVENT SLOT --- */
-/* This targets the row that contains the "all-day" cell and hides it. */
+/* --- HIDE THE ALL-DAY EVENT SLOT --- */
+/* This is the specific rule that removes the top blank row. */
 .rbc-allday-cell {
     display: none !important;
 }

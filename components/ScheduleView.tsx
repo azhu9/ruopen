@@ -128,6 +128,12 @@ export default function ScheduleView({ meetings }: ScheduleViewProps) {
         min={new Date(0, 0, 0, 8, 0, 0)}
         max={new Date(0, 0, 0, 23, 0, 0)}
         toolbar={false}
+        formats={{
+          // Show only short day names (Mon, Tue, Wed, …)
+          dayFormat: (date, culture) => localizer.format(date, "EEE", culture),
+          weekdayFormat: (date, culture) =>
+            localizer.format(date, "EEE", culture),
+        }}
       />
     </div>
   );
