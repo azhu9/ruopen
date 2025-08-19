@@ -24,11 +24,11 @@ export default function HomePage() {
   const [room, setRoom] = useState<string>("");
   const [hasSearched, setHasSearched] = useState<boolean>(false);
 
-  // New state for rooms and selected room
   const [rooms, setRooms] = useState<{ room_number: string }[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
 
   const [searchedBuilding, setSearchedBuilding] = useState<string>("");
+  const [buildingFullName, setBuildingFullName] = useState<string>("");
 
   const searchSchedule = async () => {
     if (!building) {
@@ -41,40 +41,54 @@ export default function HomePage() {
       setError(null);
       setMeetings([]);
       setRooms([]);
-      setSelectedRoom(null); // Reset selected room on new search
+      setSelectedRoom(null);
       setHasSearched(true);
 
+      setBuildingFullName("");
       setSearchedBuilding(building);
 
-      let query = supabase
+      let roomQuery = supabase
         .from("class_meetings")
         .select("room_number")
         .ilike("building_code", building.trim());
 
-      // If a room number is provided, filter by it as well
       if (room) {
-        query = query.ilike("room_number", room.trim());
+        roomQuery = roomQuery.ilike("room_number", room.trim());
       }
 
-      const { data, error } = await query;
+      const { data: roomData, error: roomError } = await roomQuery;
 
-      if (error) {
-        throw error;
-      }
+      if (roomError) throw roomError;
 
-      if (data) {
-        // Get unique room numbers
-        const uniqueRooms = [...new Set(data.map((item) => item.room_number))];
-
-        // --- THIS IS THE NEW LINE ---
-        // Sort rooms alphanumerically in ascending order
+      if (roomData && roomData.length > 0) {
+        const uniqueRooms = [
+          ...new Set(roomData.map((item) => item.room_number)),
+        ];
         uniqueRooms.sort((a, b) =>
           a.localeCompare(b, undefined, { numeric: true })
         );
-
         setRooms(uniqueRooms.map((room_number) => ({ room_number })));
+
+        const { data: buildingNameData, error: buildingNameError } =
+          await supabase
+            .from("building_codes")
+            .select("full_name")
+            // --- FIX: Use .ilike() for a case-insensitive match ---
+            .ilike("building_code", building.trim())
+            .maybeSingle();
+
+        if (buildingNameError) {
+          console.error(
+            "Could not fetch building full name:",
+            buildingNameError.message
+          );
+        } else if (buildingNameData) {
+          setBuildingFullName(buildingNameData.full_name);
+        }
+      } else {
+        // Handle case where no rooms are found
+        setRooms([]);
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -94,13 +108,10 @@ export default function HomePage() {
         .ilike("building_code", searchedBuilding.trim())
         .ilike("room_number", roomNumber);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setMeetings(data || []);
       setSelectedRoom(roomNumber);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -172,12 +183,12 @@ export default function HomePage() {
 
         {!loading && !error && hasSearched && (
           <>
-            {/* If a room is selected, show the calendar */}
             {selectedRoom ? (
               <div>
                 <div className="flex justify-between items-center">
                   <h2 className="font-semibold text-2xl my-4">
-                    Schedule for {searchedBuilding} - {selectedRoom}
+                    Schedule for {buildingFullName || searchedBuilding} -{" "}
+                    {selectedRoom}
                   </h2>
                   <Button onClick={handleBackToRooms} variant="outline">
                     Back to Room List
@@ -191,11 +202,10 @@ export default function HomePage() {
                 )}
               </div>
             ) : (
-              /* Otherwise, show the table of rooms */
               rooms.length > 0 && (
                 <div>
                   <h2 className="font-semibold text-2xl my-4">
-                    Eligible Rooms in {searchedBuilding}
+                    Eligible Rooms in {buildingFullName || searchedBuilding}
                   </h2>
                   <Table>
                     <TableHeader>
@@ -221,8 +231,7 @@ export default function HomePage() {
               )
             )}
 
-            {/* Handle case where no rooms are found for a building */}
-            {!selectedRoom && rooms.length === 0 && (
+            {!selectedRoom && hasSearched && rooms.length === 0 && (
               <p className="text-center mt-8">
                 No rooms found for this building.
               </p>
