@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { Meeting } from "../types";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { LuBuilding2 } from "react-icons/lu";
-
+// --- MODIFIED: Import the 'LuX' icon ---
+import { LuBuilding2, LuX } from "react-icons/lu";
 import ScheduleView from "../components/ScheduleView";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface BuildingSuggestion {
+  building_code: string;
+  full_name: string;
+}
 
 export default function HomePage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -30,11 +37,83 @@ export default function HomePage() {
   const [searchedBuilding, setSearchedBuilding] = useState<string>("");
   const [buildingFullName, setBuildingFullName] = useState<string>("");
 
-  const searchSchedule = async () => {
-    if (!building) {
-      alert("Please provide a building code.");
+  const [suggestions, setSuggestions] = useState<BuildingSuggestion[]>([]);
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const [alertInfo, setAlertInfo] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
+
+  const fetchBuildingSuggestions = async (searchTerm: string) => {
+    if (searchTerm.length < 2) {
+      setSuggestions([]);
       return;
     }
+    try {
+      const { data, error } = await supabase
+        .from("building_codes")
+        .select("building_code, full_name")
+        .or(
+          `building_code.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`
+        )
+        .limit(10);
+
+      if (error) throw error;
+
+      const getScore = (item: BuildingSuggestion, term: string): number => {
+        const code = item.building_code.toUpperCase();
+        const name = item.full_name.toUpperCase();
+        term = term.toUpperCase();
+
+        if (code.startsWith(term)) return 1;
+        if (name.startsWith(term)) return 2;
+        return 3;
+      };
+
+      const sortedData = (data || []).sort((a, b) => {
+        const scoreA = getScore(a, searchTerm);
+        const scoreB = getScore(b, searchTerm);
+        return scoreA - scoreB;
+      });
+
+      setSuggestions(sortedData.slice(0, 5));
+    } catch (error) {
+      console.error("Error fetching building suggestions:", error);
+      setSuggestions([]);
+    }
+  };
+
+  const handleBuildingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBuilding(value);
+
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    debounceTimeout.current = setTimeout(() => {
+      fetchBuildingSuggestions(value);
+    }, 300);
+  };
+
+  const handleSuggestionClick = (suggestion: BuildingSuggestion) => {
+    setBuilding(suggestion.building_code);
+    setSuggestions([]);
+  };
+
+  const searchSchedule = async () => {
+    setAlertInfo(null);
+
+    if (!building) {
+      setAlertInfo({
+        title: "Heads up!",
+        description: "Please provide a building code or name to search.",
+      });
+      return;
+    }
+
+    setSuggestions([]);
 
     try {
       setLoading(true);
@@ -44,13 +123,14 @@ export default function HomePage() {
       setSelectedRoom(null);
       setHasSearched(true);
 
+      const buildingCode = building.toUpperCase().trim();
       setBuildingFullName("");
-      setSearchedBuilding(building);
+      setSearchedBuilding(buildingCode);
 
       let roomQuery = supabase
         .from("class_meetings")
         .select("room_number")
-        .ilike("building_code", building.trim());
+        .ilike("building_code", buildingCode);
 
       if (room) {
         roomQuery = roomQuery.ilike("room_number", room.trim());
@@ -73,8 +153,7 @@ export default function HomePage() {
           await supabase
             .from("building_codes")
             .select("full_name")
-            // --- FIX: Use .ilike() for a case-insensitive match ---
-            .ilike("building_code", building.trim())
+            .ilike("building_code", buildingCode)
             .maybeSingle();
 
         if (buildingNameError) {
@@ -86,7 +165,6 @@ export default function HomePage() {
           setBuildingFullName(buildingNameData.full_name);
         }
       } else {
-        // Handle case where no rooms are found
         setRooms([]);
       }
     } catch (err: any) {
@@ -152,13 +230,14 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="search-form max-w-2xl md:mx-auto mx-8">
+      <div className="search-form max-w-2xl md:mx-auto mx-8 relative">
         <input
           type="text"
-          placeholder="Building Code (e.g., ARC)"
+          placeholder="Building Code or Name (e.g., ARC)"
           value={building}
-          onChange={(e) => setBuilding(e.target.value.toUpperCase())}
+          onChange={handleBuildingChange}
           aria-label="Building "
+          autoComplete="off"
         />
         <input
           type="text"
@@ -175,6 +254,48 @@ export default function HomePage() {
         >
           {loading ? "Searching..." : "Search Room"}
         </Button>
+
+        {suggestions.length > 0 && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-10">
+            <ul>
+              {suggestions.map((s, index) => (
+                <li
+                  key={s.building_code}
+                  className={`px-4 py-2 cursor-pointer hover:bg-muted ${
+                    index > 0 ? "border-t border-border" : ""
+                  }`}
+                  onClick={() => handleSuggestionClick(s)}
+                >
+                  <p className="font-semibold">{s.building_code}</p>
+                  <p className="text-sm text-muted-foreground">{s.full_name}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* --- MODIFIED: Alert component with a close button --- */}
+      <div className="max-w-2xl md:mx-auto mx-8 mt-4">
+        {alertInfo && (
+          <div className="relative">
+            <Alert className="pr-12">
+              {" "}
+              {/* Add padding to make space for the button */}
+              <AlertTitle>{alertInfo.title}</AlertTitle>
+              <AlertDescription>{alertInfo.description}</AlertDescription>
+            </Alert>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-1/2 right-3 -translate-y-1/2 h-6 w-6" // Position button
+              onClick={() => setAlertInfo(null)}
+            >
+              <LuX className="h-4 w-4" />
+              <span className="sr-only">Dismiss</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="results max-w-4xl mx-auto">
@@ -208,11 +329,7 @@ export default function HomePage() {
                     Eligible Rooms in {buildingFullName || searchedBuilding}
                   </h2>
                   <Table>
-                    <TableHeader>
-                      {/* <TableRow>
-                        <TableHead>Room Number</TableHead>
-                      </TableRow> */}
-                    </TableHeader>
+                    <TableHeader></TableHeader>
                     <TableBody>
                       {rooms.map((r) => (
                         <TableRow
