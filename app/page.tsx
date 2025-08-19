@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useRef } from "react";
@@ -8,7 +9,7 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
+  // TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
