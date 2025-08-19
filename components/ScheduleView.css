@@ -22,3 +22,8 @@
 .rbc-allday-cell {
     display: none !important;
 }
+
+.rbc-event, .rbc-event-content {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+}
