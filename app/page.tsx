@@ -59,11 +59,15 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ROOMS_PER_PAGE = 8;
 
+  const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
   const fetchBuildingSuggestions = async (searchTerm: string) => {
     if (searchTerm.length < 2) {
       setSuggestions([]);
       return;
     }
+    setSuggestionsLoading(true);
     try {
       const { data, error } = await supabase
         .from("building_codes")
@@ -95,6 +99,8 @@ export default function HomePage() {
     } catch (error) {
       console.error("Error fetching building suggestions:", error);
       setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
     }
   };
 
@@ -102,21 +108,32 @@ export default function HomePage() {
     const value = e.target.value;
     setBuilding(value);
 
+    if (value.length >= 2) {
+      setIsSuggestionsVisible(true);
+    } else {
+      setIsSuggestionsVisible(false);
+      setSuggestions([]);
+    }
+
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
     }
 
     debounceTimeout.current = setTimeout(() => {
-      fetchBuildingSuggestions(value);
+      // Ensure value is still long enough before fetching
+      if (value.length >= 2) {
+        fetchBuildingSuggestions(value);
+      }
     }, 100);
   };
-
   const handleSuggestionClick = (suggestion: BuildingSuggestion) => {
     setBuilding(suggestion.building_code);
     setSuggestions([]);
+    setIsSuggestionsVisible(false);
   };
 
   const searchSchedule = async () => {
+    setIsSuggestionsVisible(false);
     setAlertInfo(null);
 
     if (!building) {
@@ -294,22 +311,30 @@ export default function HomePage() {
               {loading ? "Searching..." : "Search"}
             </Button>
           </div>
-          {suggestions.length > 0 && (
+          {isSuggestionsVisible && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-              <ul>
-                {suggestions.map((s, index) => (
-                  <li
-                    key={s.building_code}
-                    className={`px-4 py-2 cursor-pointer hover:bg-gray-100 ${
-                      index > 0 ? "border-t border-gray-200" : ""
-                    }`}
-                    onClick={() => handleSuggestionClick(s)}
-                  >
-                    <p className="font-semibold">{s.building_code}</p>
-                    <p className="text-sm text-gray-500">{s.full_name}</p>
-                  </li>
-                ))}
-              </ul>
+              {suggestionsLoading ? (
+                <p className="px-4 py-3 text-sm text-gray-500">Searching...</p>
+              ) : suggestions.length > 0 ? (
+                <ul>
+                  {suggestions.map((s, index) => (
+                    <li
+                      key={s.building_code}
+                      className={`px-4 py-2 cursor-pointer hover:bg-gray-100 ${
+                        index > 0 ? "border-t border-gray-200" : ""
+                      }`}
+                      onClick={() => handleSuggestionClick(s)}
+                    >
+                      <p className="font-semibold">{s.building_code}</p>
+                      <p className="text-sm text-gray-500">{s.full_name}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-4 py-3 text-sm text-gray-500">
+                  No buildings found.
+                </p>
+              )}
             </div>
           )}
         </div>
