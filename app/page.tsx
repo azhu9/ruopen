@@ -15,7 +15,9 @@ import {
 import { LuBuilding2, LuX } from "react-icons/lu";
 import { HiOutlineArrowTurnUpLeft } from "react-icons/hi2";
 
-import ScheduleView from "../components/ScheduleView";
+import HowTo from "@/components/HowTo";
+import ScheduleView from "@/components/ScheduleView";
+import Footer from "@/components/Footer";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -54,7 +56,6 @@ export default function HomePage() {
     description: string;
   } | null>(null);
 
-  // --- MODIFIED: Add state for pagination ---
   const [currentPage, setCurrentPage] = useState(1);
   const ROOMS_PER_PAGE = 8;
 
@@ -229,7 +230,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="flex flex-col min-h-screen bg-gray-50">
+    <main className="flex flex-col bg-gray-50">
       <header className="absolute inset-x-0 top-0 z-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -333,6 +334,7 @@ export default function HomePage() {
           </div>
         )}
       </div>
+      {!hasSearched && <HowTo />}
 
       <div className="results w-4xl mx-auto mt-12 mb-20 px-4 sm:px-6 lg:px-8">
         {loading && <p className="text-center">Loading...</p>}
@@ -460,6 +462,8 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      <Footer />
     </main>
   );
 }
