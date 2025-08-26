@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 
 import { Meeting } from "../types";
+import { useEffect, useState } from "react";
 
 // 1. Add 'instructor' to the custom event type
 interface MyCalendarEvent extends Event {
@@ -184,22 +185,33 @@ interface ScheduleViewProps {
 
 export default function ScheduleView({ meetings }: ScheduleViewProps) {
   const events = transformMeetingsToEvents(meetings);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   return (
-    <div style={{ height: "702px" }}>
+    <div style={{ height: isMobile ? "600px" : "702px" }}>
       <Calendar
         localizer={localizer}
         events={events}
         startAccessor="start"
         endAccessor="end"
-        defaultView="week"
-        views={["week"]}
-        style={{ margin: "20px 10px" }}
+        defaultView={isMobile ? "day" : "week"}
+        views={["week", "day"]}
+        style={{ margin: "20px 0" }}
         min={new Date(0, 0, 0, 8, 0, 0)}
         max={new Date(0, 0, 0, 23, 0, 0)}
         toolbar={false}
         formats={{
-          dayFormat: (date, culture) => localizer.format(date, "EEE", culture),
+          dayFormat: (date, culture) =>
+            localizer.format(date, isMobile ? "EEE dd" : "EEE", culture),
           weekdayFormat: (date, culture) =>
             localizer.format(date, "EEE", culture),
         }}
@@ -207,6 +219,7 @@ export default function ScheduleView({ meetings }: ScheduleViewProps) {
           event: CustomEvent,
         }}
         onSelectEvent={(event, e) => e.stopPropagation()}
+        longPressThreshold={10}
       />
     </div>
   );
