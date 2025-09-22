@@ -6,7 +6,8 @@
 
 
 :root {
-  --background-color: #f4f4f9;
+  --background-color: #ffffff;
+  --gradient-form: 255 255 255;
   --text-color: #333;
   --primary-color: #cc0033;
   --card-bg: #ffffff;
@@ -43,6 +44,18 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
+}
+
+*{
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+.dark {
+  --gradient-form: #27 27 27;
+  --background-color: #1b1b1b;
+
 }
 
 body {
@@ -209,4 +222,4 @@ header {
 	radial-gradient(circle at 50% 50%, rgba(201,14,17,1), rgba(23,35,158,0.48)),
 	url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.63' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
-  
+

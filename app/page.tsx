@@ -21,7 +21,7 @@ import ScheduleView from "@/components/ScheduleView";
 import Footer from "@/components/Footer";
 
 import Image from "next/image";
-import bg from "../assets/bg.jpg";
+import bg from "../assets/bg2.jpg";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -248,7 +248,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="flex flex-col bg-gray-50">
+    <main className="flex flex-col bg-gray-50 dark:bg-[#1b1b1b]">
       <Header />
 
       <div className="relative isolate overflow-hidden pt-16">
@@ -260,17 +260,17 @@ export default function HomePage() {
           className="absolute inset-0 -z-10 h-full w-full object-cover"
         />
         <div
-          className="absolute inset-x-0 bottom-0 -z-10 h-2/3 bg-gradient-to-t from-gray-50 to-transparent"
+          className="absolute inset-x-0 bottom-0 -z-10 h-2/3 bg-gradient-to-t from-[rgb(var(--gradient-from))] to-transparent transition-[background-color] duration-300"
           aria-hidden="true"
         />
-        {/* --- MODIFIED: Adjusted vertical padding for mobile --- */}
+
+        <div className="absolute inset-x-0 bottom-0 -z-10 h-2/3 bg-gradient-to-t from-gray-50 to-transparent dark:from-[#1b1b1b] transition-colors duration-300" />
         <div className="mx-auto max-w-2xl px-4 py-24 sm:py-32 lg:py-48">
           <div className="text-center">
-            {/* --- MODIFIED: Adjusted heading size for mobile --- */}
-            <h1 className="text-4xl font-bold tracking-tight text-black sm:text-5xl md:text-6xl">
+            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
               Discover Your Perfect Study Space
             </h1>
-            <p className="mt-6 text-lg leading-8 text-gray-600">
+            <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-200">
               Search for available classrooms and study spaces across Rutgers
               University-New Brunswick.
             </p>
@@ -334,7 +334,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-4 md:mx-auto mt-4">
+      <div className="max-w-2xl mx-4 md:mx-auto">
         {alertInfo && (
           <div className="relative">
             <Alert className="pr-12 shadow-md">
@@ -355,7 +355,7 @@ export default function HomePage() {
       </div>
       {!hasSearched && <HowTo />}
 
-      <div className="results w-full max-w-4xl mx-auto mt-12 mb-20 px-4 sm:px-6 lg:px-8">
+      <div className="results w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {loading && <p className="text-center">Loading...</p>}
         {error && <p className="text-center text-red-500">Error: {error}</p>}
 
@@ -363,7 +363,6 @@ export default function HomePage() {
           <>
             {selectedRoom ? (
               <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
-                {/* --- MODIFIED: Header layout is now responsive --- */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                   <Button
                     onClick={handleBackToRooms}
@@ -387,8 +386,8 @@ export default function HomePage() {
               </div>
             ) : (
               rooms.length > 0 && (
-                <div>
-                  <h2 className="font-semibold text-2xl my-4 text-center">
+                <div className="bg-white dark:bg-[#1b1b1b] py-6 rounded-t-2xl">
+                  <h2 className="font-semibold text-2xl my-4 text-center text-black dark:text-white">
                     Available Rooms in {buildingFullName || searchedBuilding}
                   </h2>
                   <div className="border rounded-lg overflow-hidden mt-4 max-w-2xl mx-auto shadow-lg bg-white">
