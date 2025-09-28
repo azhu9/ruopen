@@ -33,18 +33,28 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 interface BuildingSuggestion {
   building_code: string;
   full_name: string;
 }
 
 export default function HomePage() {
+  const [time, setTime] = useState<string>("");
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [building, setBuilding] = useState<string>("");
   const [room, setRoom] = useState<string>("");
   const [hasSearched, setHasSearched] = useState<boolean>(false);
+  const [searchMode, setSearchMode] = useState<"room" | "time">("room");
 
   const [rooms, setRooms] = useState<{ room_number: string }[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
@@ -209,6 +219,110 @@ export default function HomePage() {
     }
   };
 
+  const searchAvailableRooms = async () => {
+    if (!building || !time) {
+      setAlertInfo({
+        title: "Missing Info",
+        description: "Please provide both a building and a time.",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setRooms([]);
+      setHasSearched(true);
+      setSelectedRoom(null);
+
+      const buildingCode = building.toUpperCase().trim();
+      setSearchedBuilding(buildingCode);
+      setBuildingFullName("");
+
+      // Get all meetings for this building
+      const { data: allMeetings, error: meetingsError } = await supabase
+        .from("class_meetings")
+        .select("room_number, start_time, end_time")
+        .ilike("building_code", buildingCode);
+
+      if (meetingsError) throw meetingsError;
+
+      if (!allMeetings || allMeetings.length === 0) {
+        setRooms([]);
+        return;
+      }
+
+      // Convert selected time to minutes since midnight
+      const [h, m] = time.split(":").map(Number);
+      const selectedMinutes = h * 60 + m;
+
+      // Group meetings by room
+      const roomsMap: Record<string, { start: number; end: number }[]> = {};
+      allMeetings.forEach((meeting) => {
+        const [sh, sm] = meeting.start_time.split(":").map(Number);
+        const [eh, em] = meeting.end_time.split(":").map(Number);
+        const start = sh * 60 + sm;
+        const end = eh * 60 + em;
+
+        if (!roomsMap[meeting.room_number]) roomsMap[meeting.room_number] = [];
+        roomsMap[meeting.room_number].push({ start, end });
+      });
+
+      const freeRooms: { room_number: string }[] = [];
+
+      for (const [roomNumber, meetings] of Object.entries(roomsMap)) {
+        // Sort by start time
+        meetings.sort((a, b) => a.start - b.start);
+
+        let isFree = true;
+        for (const { start, end } of meetings) {
+          // If selected time is inside a class, it's not free
+          if (selectedMinutes >= start && selectedMinutes < end) {
+            isFree = false;
+            break;
+          }
+
+          // If a class starts less than 60 min after the selected time → not enough gap
+          if (selectedMinutes < start && start - selectedMinutes < 60) {
+            isFree = false;
+            break;
+          }
+
+          // If a class ends less than 60 min before the selected time → not enough gap
+          if (selectedMinutes > end && selectedMinutes - end < 60) {
+            isFree = false;
+            break;
+          }
+        }
+
+        if (isFree) {
+          freeRooms.push({ room_number: roomNumber });
+        }
+      }
+
+      freeRooms.sort((a, b) =>
+        a.room_number.localeCompare(b.room_number, undefined, { numeric: true })
+      );
+
+      setRooms(freeRooms);
+
+      // Fetch building full name
+      const { data: buildingNameData } = await supabase
+        .from("building_codes")
+        .select("full_name")
+        .ilike("building_code", buildingCode)
+        .maybeSingle();
+
+      if (buildingNameData) {
+        setBuildingFullName(buildingNameData.full_name);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchMeetingsForRoom = async (roomNumber: string) => {
     try {
       setLoading(true);
@@ -279,7 +393,7 @@ export default function HomePage() {
       </div>
       <div className="search-form -mt-16 sm:-mt-20 lg:-mt-24 max-w-2xl mx-auto relative">
         <div className="relative">
-          <div className="flex flex-col sm:flex-row items-center bg-white rounded-lg shadow-xl p-3 gap-3">
+          {/* <div className="flex flex-col sm:flex-row items-center bg-white rounded-lg shadow-xl p-3 gap-3">
             <input
               type="text"
               placeholder="Building Name (e.g., ARC)"
@@ -304,7 +418,68 @@ export default function HomePage() {
             >
               {loading ? "Searching..." : "Search"}
             </Button>
+          </div> */}
+          <div className="flex flex-col sm:flex-row items-center bg-white rounded-lg shadow-xl p-3 gap-3">
+            {/* Mode dropdown */}
+            <Select
+              value={searchMode}
+              onValueChange={(v: "room" | "time") => setSearchMode(v)}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Search Mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="room">Search by Room</SelectItem>
+                <SelectItem value="time">Search by Time</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {searchMode === "room" ? (
+              <>
+                <input
+                  type="text"
+                  placeholder="Building (e.g., ARC)"
+                  value={building}
+                  onChange={handleBuildingChange}
+                  className="flex-grow p-2 text-lg bg-transparent focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Room (e.g., 105)"
+                  value={room}
+                  onChange={(e) => setRoom(e.target.value)}
+                  className="w-36 p-2 text-lg bg-transparent focus:outline-none"
+                />
+              </>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="Building (e.g., ARC)"
+                  value={building}
+                  onChange={handleBuildingChange}
+                  className="flex-grow p-2 text-lg bg-transparent focus:outline-none"
+                />
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="w-40 p-2 text-lg bg-transparent focus:outline-none"
+                />
+              </>
+            )}
+
+            <Button
+              onClick={
+                searchMode === "room" ? searchSchedule : searchAvailableRooms
+              }
+              disabled={loading}
+              className="w-full sm:w-auto p-6 text-lg rounded-md"
+            >
+              {loading ? "Searching..." : "Search"}
+            </Button>
           </div>
+
           {isSuggestionsVisible && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10">
               {suggestionsLoading ? (
