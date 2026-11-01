@@ -1,24 +1,25 @@
-import { RoomStatus, statusText } from "@/lib/schedule";
+import { Availability } from "@/lib/when";
+
+const STYLES = {
+  free: { text: "text-ok", dot: "bg-ok-dot" },
+  partial: { text: "text-partial", dot: "bg-partial-dot" },
+  busy: { text: "text-label-2", dot: "bg-busy-dot" },
+};
 
 export default function StatusLabel({
   status,
   className = "",
 }: {
-  status: RoomStatus;
+  status: Availability;
   className?: string;
 }) {
+  const style = STYLES[status.kind];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[13px] ${
-        status.free ? "text-ok" : "text-label-2"
-      } ${className}`}
+      className={`inline-flex items-center gap-1.5 text-[13px] ${style.text} ${className}`}
     >
-      <span
-        className={`size-2 shrink-0 rounded-full ${
-          status.free ? "bg-ok-dot" : "bg-busy-dot"
-        }`}
-      />
-      {statusText(status)}
+      <span className={`size-2 shrink-0 rounded-full ${style.dot}`} />
+      {status.text}
     </span>
   );
 }

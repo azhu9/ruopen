@@ -4,7 +4,9 @@ import { useCallback, useMemo, useState } from "react";
 import { LuChevronRight } from "react-icons/lu";
 import {
   ClassBlock,
+  DAY_END,
   DAY_NAMES,
+  DAY_START,
   WEEK_ORDER,
   dayCodeOf,
   formatDuration,
@@ -13,20 +15,20 @@ import {
   minutesOf,
 } from "@/lib/schedule";
 import ClassSheet from "./ClassSheet";
-import { Segmented } from "./RoomList";
+import Segmented from "./Segmented";
 
 const HOUR_HEIGHT = 56;
-const DAY_START = 8 * 60;
-const DAY_END = 22 * 60;
 
 interface ScheduleViewProps {
   blocks: ClassBlock[];
   now: Date;
+  initialDay: string;
 }
 
-export default function ScheduleView({ blocks, now }: ScheduleViewProps) {
+export default function ScheduleView({ blocks, now, initialDay }: ScheduleViewProps) {
   const [openBlock, setOpenBlock] = useState<ClassBlock | null>(null);
   const closeSheet = useCallback(() => setOpenBlock(null), []);
+  const [view, setView] = useState<"day" | "week">("day");
 
   const days = useMemo(
     () =>
@@ -40,7 +42,7 @@ export default function ScheduleView({ blocks, now }: ScheduleViewProps) {
 
   const today = dayCodeOf(now);
   const [selectedDay, setSelectedDay] = useState<string>(() =>
-    days.includes(today) ? today : "M"
+    days.includes(initialDay) ? initialDay : "M"
   );
 
   if (blocks.length === 0) {
@@ -56,21 +58,36 @@ export default function ScheduleView({ blocks, now }: ScheduleViewProps) {
 
   return (
     <>
-      <div className="md:hidden">
+      <div className="mt-8 flex items-center justify-between gap-4">
+        <h2 className="text-[20px] font-semibold tracking-tight">Schedule</h2>
         <Segmented
-          value={selectedDay}
-          onChange={setSelectedDay}
-          options={days.map((d) => ({ value: d, label: DAY_NAMES[d].short }))}
-          className="mt-6"
-        />
-        <DayAgenda
-          blocks={blocks.filter((b) => b.day === selectedDay)}
-          isToday={selectedDay === today}
-          nowMins={minutesOf(now)}
-          onOpen={setOpenBlock}
+          label="Schedule view"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "day", label: "Day" },
+            { value: "week", label: "Week" },
+          ]}
+          className="w-40"
         />
       </div>
-      <div className="hidden md:block">
+      {view === "day" ? (
+        <>
+          <Segmented
+            label="Day"
+            value={selectedDay}
+            onChange={setSelectedDay}
+            options={days.map((d) => ({ value: d, label: DAY_NAMES[d].short }))}
+            className="mt-4"
+          />
+          <DayAgenda
+            blocks={blocks.filter((b) => b.day === selectedDay)}
+            isToday={selectedDay === today}
+            nowMins={minutesOf(now)}
+            onOpen={setOpenBlock}
+          />
+        </>
+      ) : (
         <WeekGrid
           blocks={blocks}
           days={days}
@@ -78,7 +95,7 @@ export default function ScheduleView({ blocks, now }: ScheduleViewProps) {
           nowMins={minutesOf(now)}
           onOpen={setOpenBlock}
         />
-      </div>
+      )}
       <ClassSheet block={openBlock} onClose={closeSheet} />
     </>
   );

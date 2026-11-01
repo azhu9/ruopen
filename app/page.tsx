@@ -1,340 +1,268 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LuChevronLeft } from "react-icons/lu";
-import { supabase } from "../lib/supabaseClient";
-import { Meeting } from "../types";
-import { buildBlocks, compareRooms, roomStatus } from "@/lib/schedule";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { LuChevronDown, LuChevronRight, LuSearch } from "react-icons/lu";
+import { CAMPUSES, fetchBuildingNames, fetchCampus } from "@/lib/data";
+import { useAsync, useNow, useStored } from "@/lib/hooks";
+import {
+  When,
+  availability,
+  compareAvailability,
+  parseWhen,
+  whenParams,
+  whenQuery,
+} from "@/lib/when";
+import CampusPicker from "@/components/CampusPicker";
+import WhenPicker from "@/components/WhenPicker";
+import RoomRow from "@/components/RoomRow";
+import { ListSkeleton, Message } from "@/components/States";
 
-import Header from "@/components/Header";
-import HowTo from "@/components/HowTo";
-import SearchBar from "@/components/SearchBar";
-import RoomList from "@/components/RoomList";
-import ScheduleView from "@/components/ScheduleView";
-import StatusLabel from "@/components/StatusLabel";
-import Footer from "@/components/Footer";
+const ROOMS_PER_BUILDING = 4;
 
-interface LoadedBuilding {
-  code: string;
-  fullName: string;
-  meetings: Meeting[];
-}
-
-const MEETING_COLUMNS =
-  "id, course_title, subject, course_number, section_index, instructors, meeting_day, start_time, end_time, room_number";
-const PAGE_SIZE = 1000;
-
-// Loads every meeting in a building (paged past Supabase's 1000-row cap) so
-// the room list, "free now" status and schedules need no further queries.
-async function fetchBuilding(code: string): Promise<LoadedBuilding> {
-  const namePromise = supabase
-    .from("building_codes")
-    .select("full_name")
-    .ilike("building_code", code)
-    .maybeSingle()
-    .then((res) => res);
-
-  const meetings: Meeting[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("class_meetings")
-      .select(MEETING_COLUMNS)
-      .ilike("building_code", code)
-      .order("id")
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    meetings.push(...((data ?? []) as unknown as Meeting[]));
-    if (!data || data.length < PAGE_SIZE) break;
-  }
-
-  const { data: nameData, error: nameError } = await namePromise;
-  if (nameError) {
-    console.error("Could not fetch building full name:", nameError.message);
-  }
-  return { code, fullName: nameData?.full_name ?? "", meetings };
-}
-
-function listRooms(meetings: Meeting[]) {
-  return [
-    ...new Set(
-      meetings.map((m) => m.room_number).filter((r): r is string => !!r)
-    ),
-  ].sort(compareRooms);
-}
-
-function writeUrl(
-  building: string | null,
-  room: string | null,
-  mode: "push" | "replace",
-  state: Record<string, unknown> | null = null
-) {
-  const params = new URLSearchParams();
-  if (building) params.set("b", building);
-  if (room) params.set("r", room);
-  const qs = params.toString();
-  const url = qs ? `?${qs}` : window.location.pathname;
-  if (window.location.search === (qs ? `?${qs}` : "")) mode = "replace";
-  if (mode === "push") window.history.pushState(state, "", url);
-  else window.history.replaceState(state, "", url);
-}
-
-export default function HomePage() {
-  const [building, setBuilding] = useState("");
-  const [room, setRoom] = useState("");
-  const [loaded, setLoaded] = useState<LoadedBuilding | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [now, setNow] = useState(() => new Date());
-
-  const loadedRef = useRef<LoadedBuilding | null>(null);
-  const requestRef = useRef(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const loadBuilding = useCallback(async (code: string) => {
-    if (loadedRef.current?.code === code) return loadedRef.current;
-    const id = ++requestRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchBuilding(code);
-      if (id !== requestRef.current) return null;
-      loadedRef.current = result;
-      setLoaded(result);
-      return result;
-    } catch (err) {
-      if (id === requestRef.current) {
-        loadedRef.current = null;
-        setLoaded(null);
-        setError(err instanceof Error ? err.message : "Something went wrong.");
-      }
-      return null;
-    } finally {
-      if (id === requestRef.current) setLoading(false);
-    }
-  }, []);
-
-  const resetToHome = useCallback(() => {
-    requestRef.current++;
-    loadedRef.current = null;
-    setLoaded(null);
-    setSelectedRoom(null);
-    setLoading(false);
-    setError(null);
-    setNotice(null);
-  }, []);
-
-  // The URL (?b=ARC&r=105) is the source of truth for what's on screen, so
-  // links can be shared and the browser back button works.
-  const applyUrl = useCallback(async () => {
-    const params = new URLSearchParams(window.location.search);
-    const b = params.get("b")?.trim().toUpperCase() || null;
-    const r = params.get("r")?.trim() || null;
-    if (!b) {
-      resetToHome();
-      return;
-    }
-    setNotice(null);
-    setBuilding(b);
-    setSelectedRoom(r);
-    await loadBuilding(b);
-  }, [loadBuilding, resetToHome]);
-
-  useEffect(() => {
-    applyUrl();
-    window.addEventListener("popstate", applyUrl);
-    return () => window.removeEventListener("popstate", applyUrl);
-  }, [applyUrl]);
-
-  const searchSchedule = async (codeOverride?: string) => {
-    const code = (codeOverride ?? building).trim().toUpperCase();
-    setNotice(null);
-    if (!code) {
-      setNotice("Enter a building code or name to search.");
-      return;
-    }
-
-    setSelectedRoom(null);
-    const result = await loadBuilding(code);
-    if (!result) return;
-
-    const wanted = room.trim().toLowerCase();
-    let match: string | null = null;
-    if (wanted) {
-      match = listRooms(result.meetings).find((r) => r.toLowerCase() === wanted) ?? null;
-      if (!match && result.meetings.length > 0) {
-        setNotice(`There's no room “${room.trim()}” in ${code}. Showing all rooms.`);
-      }
-    }
-    writeUrl(code, match, "push", match ? { fromList: false } : null);
-    setSelectedRoom(match);
-  };
-
-  const selectRoom = (r: string) => {
-    if (!loaded) return;
-    writeUrl(loaded.code, r, "push", { fromList: true });
-    setSelectedRoom(r);
-    window.scrollTo(0, 0);
-  };
-
-  const backToRooms = () => {
-    if (window.history.state?.fromList) {
-      window.history.back();
-      return;
-    }
-    writeUrl(loaded?.code ?? null, null, "replace");
-    setSelectedRoom(null);
-  };
-
-  const goHome = () => {
-    writeUrl(null, null, "push");
-    resetToHome();
-    setBuilding("");
-    setRoom("");
-    window.scrollTo(0, 0);
-  };
-
-  const roomEntries = useMemo(() => {
-    if (!loaded) return [];
-    const byRoom = new Map<string, Meeting[]>();
-    for (const m of loaded.meetings) {
-      if (!m.room_number) continue;
-      const list = byRoom.get(m.room_number) ?? [];
-      list.push(m);
-      byRoom.set(m.room_number, list);
-    }
-    return [...byRoom.entries()]
-      .sort(([a], [b]) => compareRooms(a, b))
-      .map(([room, meetings]) => ({ room, blocks: buildBlocks(meetings) }));
-  }, [loaded]);
-
-  const roomsWithStatus = useMemo(
-    () =>
-      roomEntries.map(({ room, blocks }) => ({
-        room,
-        status: roomStatus(blocks, now),
-      })),
-    [roomEntries, now]
+export default function FreeRoomsPage() {
+  return (
+    <Suspense fallback={<ListSkeleton />}>
+      <FreeRooms />
+    </Suspense>
   );
+}
 
-  const selectedEntry =
-    loaded && selectedRoom
-      ? roomEntries.find((e) => e.room.toLowerCase() === selectedRoom.toLowerCase())
-      : undefined;
+function FreeRooms() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const now = useNow();
+  const [storedCampus, setStoredCampus] = useStored("campus", "cac");
 
-  const atHome = !loaded && !loading && !error;
-  const buildingLabel = loaded ? loaded.fullName || loaded.code : "";
+  // Links from the previous version of the site used ?b=ARC&r=105.
+  const legacyBuilding = params.get("b");
+  useEffect(() => {
+    if (!legacyBuilding) return;
+    const room = params.get("r");
+    router.replace(
+      `/b/${encodeURIComponent(legacyBuilding.toUpperCase())}${
+        room ? `/${encodeURIComponent(room)}` : ""
+      }`
+    );
+  }, [legacyBuilding, params, router]);
+
+  const campus =
+    CAMPUSES.find((c) => c.slug === params.get("campus")) ??
+    CAMPUSES.find((c) => c.slug === storedCampus) ??
+    CAMPUSES[0];
+  const when = parseWhen(params);
+
+  const updateUrl = (slug: string, next: When) => {
+    const qs = new URLSearchParams({ campus: slug, ...whenParams(next) });
+    router.replace(`/?${qs}`, { scroll: false });
+  };
+
+  const buildings = useAsync(() => fetchCampus(campus.id), [campus.id]);
+  const names = useAsync(fetchBuildingNames, []);
+
+  const results = useMemo(() => {
+    if (!buildings.data) return null;
+    const groups = [];
+    const partial = [];
+    for (const b of buildings.data) {
+      const rooms = b.rooms
+        .map((r) => ({ ...r, status: availability(r.blocks, when, now) }))
+        .sort((x, y) => compareAvailability(x.status, y.status));
+      const free = rooms.filter((r) => r.status.kind === "free");
+      if (free.length) groups.push({ code: b.code, rooms: free });
+      partial.push(
+        ...rooms
+          .filter((r) => r.status.kind === "partial")
+          .map((r) => ({ ...r, code: b.code }))
+      );
+    }
+    groups.sort((a, b) => b.rooms.length - a.rooms.length);
+    partial.sort((a, b) => compareAvailability(a.status, b.status));
+    const freeCount = groups.reduce((n, g) => n + g.rooms.length, 0);
+    return { groups, partial, freeCount };
+    // `when` is derived from the URL; compare by its serialized form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildings.data, whenQuery(when), now]);
+
+  if (legacyBuilding) return <ListSkeleton />;
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <Header onHome={goHome} />
+    <div className="pt-8 sm:pt-12">
+      <h1 className="text-[34px] font-semibold leading-tight tracking-tight sm:text-5xl">
+        Free rooms
+      </h1>
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 sm:px-6">
-        {selectedEntry && loaded ? (
-          <section className="pt-4 animate-in fade-in-0 duration-300">
+      <Link
+        href="/search"
+        className="mt-5 flex h-11 items-center gap-2.5 rounded-xl bg-fill px-3.5 text-[17px] text-label-2 transition-colors hover:text-label"
+      >
+        <LuSearch className="size-[18px]" />
+        Search buildings and rooms
+      </Link>
+
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <CampusPicker
+          value={campus.slug}
+          onChange={(slug) => {
+            setStoredCampus(slug);
+            updateUrl(slug, when);
+          }}
+        />
+        <div>
+          <WhenPicker when={when} now={now} onChange={(w) => updateUrl(campus.slug, w)} />
+        </div>
+      </div>
+
+      <div className="mt-8">
+        {buildings.loading || (!results && !buildings.error) ? (
+          <ListSkeleton />
+        ) : buildings.error ? (
+          <Message title="Couldn't load rooms" text={buildings.error} />
+        ) : results && results.freeCount === 0 && results.partial.length === 0 ? (
+          <Message
+            title="No free rooms"
+            text={`Every room on ${campus.label} is in use then. Try another time.`}
+          />
+        ) : (
+          results && (
+            <>
+              <p className="mb-4 px-1 text-[15px] text-label-2">
+                {results.freeCount} {results.freeCount === 1 ? "room" : "rooms"}{" "}
+                free in {results.groups.length}{" "}
+                {results.groups.length === 1 ? "building" : "buildings"}
+              </p>
+              <div className="flex flex-col gap-6">
+                {results.groups.map((g) => (
+                  <BuildingGroup
+                    key={`${campus.slug}-${g.code}`}
+                    code={g.code}
+                    name={names.data?.get(g.code)}
+                    rooms={g.rooms}
+                    when={when}
+                    now={now}
+                  />
+                ))}
+              </div>
+              {results.partial.length > 0 && (
+                <PartlyFree rooms={results.partial} when={when} now={now} />
+              )}
+            </>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+type RoomResult = Parameters<typeof RoomRow>[0];
+
+function BuildingGroup({
+  code,
+  name,
+  rooms,
+  when,
+  now,
+}: {
+  code: string;
+  name?: string;
+  rooms: { room: string; blocks: RoomResult["blocks"]; status: RoomResult["status"] }[];
+  when: When;
+  now: Date;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rooms : rooms.slice(0, ROOMS_PER_BUILDING);
+  const hidden = rooms.length - shown.length;
+
+  return (
+    <section>
+      <Link
+        href={`/b/${encodeURIComponent(code)}${whenQuery(when)}`}
+        className="group mb-2 flex items-end justify-between gap-3 px-1"
+      >
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-[20px] font-semibold tracking-tight">{code}</span>
+          {name && (
+            <span className="truncate text-[15px] text-label-2">{name}</span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-0.5 text-[15px] text-label-2 group-hover:text-label">
+          {rooms.length} free
+          <LuChevronRight className="size-4" />
+        </span>
+      </Link>
+      <ul className="overflow-hidden rounded-2xl bg-surface shadow-card">
+        {shown.map((r) => (
+          <RoomRow
+            key={r.room}
+            code={code}
+            room={r.room}
+            blocks={r.blocks}
+            status={r.status}
+            when={when}
+            now={now}
+          />
+        ))}
+        {hidden > 0 && (
+          <li>
             <button
               type="button"
-              onClick={backToRooms}
-              className="-ml-1.5 flex items-center gap-0.5 rounded-lg py-1 pr-2 text-[17px] text-tint hover:opacity-80"
+              onClick={() => setExpanded(true)}
+              className="w-full border-t border-separator px-4 py-3 text-left text-[15px] text-tint hover:bg-fill/50"
             >
-              <LuChevronLeft className="size-6" />
-              {loaded.code}
+              Show {hidden} more
             </button>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Room {selectedEntry.room}
-            </h1>
-            <p className="mt-1 text-[15px] text-label-2">{buildingLabel}</p>
-            <StatusLabel
-              status={roomStatus(selectedEntry.blocks, now)}
-              className="mt-3 rounded-full bg-surface px-3 py-1.5 shadow-card"
-            />
-            <ScheduleView
-              key={`${loaded.code}-${selectedEntry.room}`}
-              blocks={selectedEntry.blocks}
-              now={now}
-            />
-          </section>
-        ) : (
-          <>
-            {atHome ? (
-              <div className="pb-8 pt-14 text-center sm:pb-10 sm:pt-24">
-                <h1 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.03em] sm:text-6xl">
-                  Find an open room.
-                </h1>
-                <p className="mx-auto mt-4 max-w-md text-[17px] leading-snug text-label-2 sm:text-xl">
-                  Search any classroom at Rutgers–New Brunswick and see when
-                  it&apos;s free.
-                </p>
-              </div>
-            ) : (
-              <div className="pt-6" />
-            )}
-
-            <div className="mx-auto max-w-2xl">
-              <SearchBar
-                building={building}
-                room={room}
-                onBuildingChange={setBuilding}
-                onRoomChange={setRoom}
-                onSearch={searchSchedule}
-                loading={loading}
-              />
-              {notice && (
-                <p className="mt-3 px-1 text-sm text-label-2 animate-in fade-in-0">
-                  {notice}
-                </p>
-              )}
-            </div>
-
-            {atHome && <HowTo />}
-
-            <div className="mt-10">
-              {loading && <Spinner />}
-              {error && !loading && (
-                <p className="text-center text-[15px] text-busy">
-                  Something went wrong: {error}
-                </p>
-              )}
-              {loaded && !loading && !error && (
-                roomsWithStatus.length > 0 ? (
-                  <RoomList
-                    key={loaded.code}
-                    buildingCode={loaded.code}
-                    buildingName={loaded.fullName}
-                    rooms={roomsWithStatus}
-                    onSelect={selectRoom}
-                  />
-                ) : (
-                  <div className="text-center">
-                    <p className="text-lg font-semibold">
-                      No rooms found for “{loaded.code}”
-                    </p>
-                    <p className="mt-1 text-[15px] text-label-2">
-                      Try a building code like ARC or pick one from the
-                      suggestions.
-                    </p>
-                  </div>
-                )
-              )}
-            </div>
-          </>
+          </li>
         )}
-      </main>
-
-      <Footer />
-    </div>
+      </ul>
+    </section>
   );
 }
 
-function Spinner() {
+function PartlyFree({
+  rooms,
+  when,
+  now,
+}: {
+  rooms: (Pick<RoomResult, "room" | "blocks" | "status"> & { code: string })[];
+  when: When;
+  now: Date;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex justify-center py-10" role="status" aria-label="Loading">
-      <span className="size-6 animate-spin rounded-full border-2 border-fill border-t-label-2" />
-    </div>
+    <section className="mt-8">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="mb-2 flex w-full items-center justify-between px-1 text-left"
+      >
+        <span className="text-[20px] font-semibold tracking-tight">
+          Partly free
+          <span className="ml-2 text-[15px] font-normal text-label-2">
+            {rooms.length} {rooms.length === 1 ? "room" : "rooms"}
+          </span>
+        </span>
+        <LuChevronDown
+          className={`size-5 text-label-2 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <ul className="overflow-hidden rounded-2xl bg-surface shadow-card animate-in fade-in-0">
+          {rooms.map((r) => (
+            <RoomRow
+              key={`${r.code}-${r.room}`}
+              code={r.code}
+              room={r.room}
+              blocks={r.blocks}
+              status={r.status}
+              when={when}
+              now={now}
+              showBuilding
+            />
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

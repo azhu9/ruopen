@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import AppNav from "@/components/AppNav";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,7 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "RU Open",
   description:
-    "Search for available classrooms and study spaces across Rutgers University-New Brunswick",
+    "Find free classrooms and study spaces across Rutgers University-New Brunswick",
 };
 
 export const viewport: Viewport = {
@@ -34,7 +36,15 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} antialiased`}>
+        <div className="flex min-h-dvh flex-col pb-[calc(env(safe-area-inset-bottom)+3.5rem)] sm:pb-0">
+          <AppNav />
+          <main className="mx-auto w-full max-w-3xl flex-1 px-4 sm:px-6">
+            {children}
+          </main>
+          <Footer />
+        </div>
+      </body>
     </html>
   );
 }

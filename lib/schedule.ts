@@ -31,10 +31,9 @@ export interface ClassBlock {
   courses: CourseInfo[];
 }
 
-export interface RoomStatus {
-  free: boolean;
-  until: number | null; // minutes since midnight, null = rest of the day
-}
+// Hours shown on timelines and used as the edges of "free" gaps.
+export const DAY_START = 8 * 60;
+export const DAY_END = 22 * 60;
 
 // Times are stored as "HHMM" without AM/PM, so infer the afternoon/evening
 // slots the same way the original calendar did.
@@ -117,27 +116,6 @@ export function dayCodeOf(date: Date) {
   return DAY_CODES[date.getDay()];
 }
 
-export function roomStatus(blocks: ClassBlock[], now: Date): RoomStatus {
-  const today = dayCodeOf(now);
-  const mins = minutesOf(now);
-  const todays = blocks
-    .filter((b) => b.day === today)
-    .sort((a, b) => a.start - b.start);
-
-  const current = todays.find((b) => b.start <= mins && mins < b.end);
-  if (current) {
-    // Extend through back-to-back or overlapping classes.
-    let until = current.end;
-    for (const b of todays) {
-      if (b.start <= until && b.end > until) until = b.end;
-    }
-    return { free: false, until };
-  }
-
-  const next = todays.find((b) => b.start > mins);
-  return { free: true, until: next ? next.start : null };
-}
-
 export function formatTime(mins: number, withPeriod = true) {
   const h24 = Math.floor(mins / 60) % 24;
   const m = mins % 60;
@@ -157,15 +135,6 @@ export function formatDuration(mins: number) {
   if (h && m) return `${h} hr ${m} min`;
   if (h) return `${h} hr`;
   return `${m} min`;
-}
-
-export function statusText(status: RoomStatus) {
-  if (status.free) {
-    return status.until === null
-      ? "Free for the rest of the day"
-      : `Free until ${formatTime(status.until)}`;
-  }
-  return `In use until ${formatTime(status.until!)}`;
 }
 
 export function compareRooms(a: string, b: string) {
