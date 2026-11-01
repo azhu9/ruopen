@@ -1,54 +1,40 @@
-import { Search, List, CalendarDays } from "lucide-react"; // Import some icons
+import { Search, DoorOpen, CalendarDays } from "lucide-react";
+
+const steps = [
+  {
+    icon: Search,
+    title: "Search a building",
+    text: "Type a code like ARC or a name like Hill Center.",
+  },
+  {
+    icon: DoorOpen,
+    title: "Pick a room",
+    text: "See which rooms are free right now.",
+  },
+  {
+    icon: CalendarDays,
+    title: "Check the schedule",
+    text: "Find a gap that fits your study session.",
+  },
+];
 
 export default function HowTo() {
   return (
-    <main className="flex flex-col bg-gray-50 dark:bg-[#1b1b1b]">
-      <div className="max-w-4xl mx-auto mt-12 mb-20 px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-800 dark:text-white">
-            Find a Space in 3 Easy Steps
-          </h2>
-          <p className="mt-2 text-md text-gray-500 dark:text-gray-300">
-            Your next study session is just a few clicks away.
-          </p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8 text-center">
-          <div className="flex flex-col items-center p-6 bg-white rounded-lg border border-gray-200 shadow-lg">
-            <div className="flex items-center justify-center h-16 w-16 mb-4 bg-gray-100 text-gray-400 rounded-full">
-              <Search className="h-8 w-8" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              1. Search a Building
-            </h3>
-            <p className="text-gray-600">
-              Enter a building code or name. Our smart search will help you find
-              it.
-            </p>
+    <ol className="mt-14 grid gap-6 sm:mt-20 sm:grid-cols-3 sm:gap-8">
+      {steps.map(({ icon: Icon, title, text }) => (
+        <li
+          key={title}
+          className="flex items-start gap-4 sm:flex-col sm:items-center sm:text-center"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-fill text-label-2">
+            <Icon className="size-5" strokeWidth={1.75} />
+          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold">{title}</h3>
+            <p className="mt-0.5 text-sm leading-snug text-label-2">{text}</p>
           </div>
-          <div className="flex flex-col items-center p-6 bg-white rounded-lg border border-gray-200 shadow-lg">
-            <div className="flex items-center justify-center h-16 w-16 mb-4 bg-gray-100 text-gray-400 rounded-full">
-              <List className="h-8 w-8" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              2. Select a Room
-            </h3>
-            <p className="text-gray-600">
-              We'll show you a list of all available rooms in that building.
-            </p>
-          </div>
-          <div className="flex flex-col items-center p-6 bg-white rounded-lg border border-gray-200 shadow-lg">
-            <div className="flex items-center justify-center h-16 w-16 mb-4 bg-gray-100 text-gray-400 rounded-full">
-              <CalendarDays className="h-8 w-8" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              3. View the Schedule
-            </h3>
-            <p className="text-gray-600">
-              See the room's daily schedule to find the perfect open time slot.
-            </p>
-          </div>
-        </div>
-      </div>
-    </main>
+        </li>
+      ))}
+    </ol>
   );
 }

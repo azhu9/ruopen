@@ -1,226 +1,339 @@
 "use client";
 
+import { useCallback, useMemo, useState } from "react";
+import { LuChevronRight } from "react-icons/lu";
 import {
-  Calendar,
-  dateFnsLocalizer,
-  Event,
-  EventProps,
-} from "react-big-calendar";
-import { format as formatDate, format } from "date-fns/format";
-import { parse } from "date-fns/parse";
-import { startOfWeek } from "date-fns/startOfWeek";
-import { getDay } from "date-fns/getDay";
-import { enUS } from "date-fns/locale/en-US";
-import "react-big-calendar/lib/css/react-big-calendar.css";
-import "./ScheduleView.css";
+  ClassBlock,
+  DAY_NAMES,
+  WEEK_ORDER,
+  dayCodeOf,
+  formatDuration,
+  formatRange,
+  formatTime,
+  minutesOf,
+} from "@/lib/schedule";
+import ClassSheet from "./ClassSheet";
+import { Segmented } from "./RoomList";
 
-// Import your Shadcn Popover components
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import { Meeting } from "../types";
-import { useEffect, useState } from "react";
-
-// 1. Add 'instructor' to the custom event type
-interface MyCalendarEvent extends Event {
-  subject?: string | null;
-  course_number?: string | null;
-  course_title?: string | null;
-  sections: string[];
-  instructor?: string | null; // Added instructor field
-}
-
-// Setup for the localizer remains the same...
-const locales = { "en-US": enUS };
-const localizer = dateFnsLocalizer({
-  format: formatDate,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
-
-const transformMeetingsToEvents = (meetings: Meeting[]): MyCalendarEvent[] => {
-  const groupedMeetings = new Map<string, Meeting & { sections: string[] }>();
-
-  meetings.forEach((meeting) => {
-    if (
-      !meeting.subject ||
-      !meeting.course_number ||
-      !meeting.meeting_day ||
-      !meeting.start_time ||
-      !meeting.end_time
-    ) {
-      return;
-    }
-    const key = `${meeting.subject}:${meeting.course_number}:${meeting.meeting_day}:${meeting.start_time}:${meeting.end_time}`;
-    if (!groupedMeetings.has(key)) {
-      groupedMeetings.set(key, {
-        ...meeting,
-        sections: [meeting.section_index].filter(
-          (s): s is string => s !== null
-        ),
-      });
-    } else {
-      const existingMeeting = groupedMeetings.get(key)!;
-      if (meeting.section_index) {
-        existingMeeting.sections.push(meeting.section_index);
-      }
-    }
-  });
-
-  const events: MyCalendarEvent[] = [];
-  const today = new Date();
-  const dayMapping: { [key: string]: number } = {
-    M: 1,
-    T: 2,
-    W: 3,
-    H: 4,
-    F: 5,
-    S: 6,
-    U: 0,
-  };
-
-  groupedMeetings.forEach((group) => {
-    if (!group.meeting_day || !group.start_time || !group.end_time) {
-      return;
-    }
-
-    const dayIndex = dayMapping[group.meeting_day];
-    if (dayIndex === undefined) return;
-
-    let startHour = parseInt(group.start_time.substring(0, 2));
-    const startMinute = parseInt(group.start_time.substring(2, 4));
-    let endHour = parseInt(group.end_time.substring(0, 2));
-    const endMinute = parseInt(group.end_time.substring(2, 4));
-
-    if (startHour < 8) startHour += 12;
-    if (endHour < 8) endHour += 12;
-    if (endHour < startHour && startHour > 12) endHour += 12;
-    if (startHour === 9 && (startMinute === 20 || startMinute === 35))
-      startHour += 12;
-    if (endHour === 10 && (endMinute === 30 || endMinute === 40)) endHour += 12;
-
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - today.getDay() + dayIndex);
-    startDate.setHours(startHour, startMinute, 0, 0);
-
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() - today.getDay() + dayIndex);
-    endDate.setHours(endHour, endMinute, 0, 0);
-
-    group.sections.sort();
-
-    // 2. Add the instructor property when creating the event object
-    events.push({
-      title: `${group.subject}:${group.course_number} - ${group.course_title}`,
-      start: startDate,
-      end: endDate,
-      subject: group.subject,
-      course_number: group.course_number,
-      course_title: group.course_title,
-      sections: group.sections,
-      instructor: group.instructors, // Pass instructor data here
-    });
-  });
-  return events;
-};
-
-// 3. Render the instructor information in the popover
-const CustomEvent = ({ event }: EventProps<MyCalendarEvent>) => {
-  const startTime = event.start ? format(event.start, "p") : "";
-  const endTime = event.end ? format(event.end, "p") : "";
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <div className="cursor-pointer">
-          <div className="font-semibold">{event.course_title}</div>
-          <p>
-            {event.subject}:{event.course_number}
-          </p>
-        </div>
-      </PopoverTrigger>
-      <PopoverContent className="w-80" onClick={(e) => e.stopPropagation()}>
-        <div className="grid gap-4">
-          <div className="space-y-2">
-            <h4 className="font-bold leading-none">{event.course_title}</h4>
-            <p className="text-sm">
-              {event.subject}:{event.course_number}
-            </p>
-          </div>
-          <div className="grid gap-2">
-            <div className="grid grid-cols-3 items-center gap-4">
-              <span className="font-semibold">Time:</span>
-              <span className="col-span-2">
-                {startTime} - {endTime}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-              <span className="font-semibold">Sections:</span>
-              <span className="col-span-2">{event.sections.join(", ")}</span>
-            </div>
-            {/* --- NEWLY ADDED BLOCK --- */}
-            {/* This will only render if the instructor field has a value */}
-            {event.instructor && (
-              <div className="grid grid-cols-3 items-center gap-4">
-                <span className="font-semibold">Instructor:</span>
-                <span className="col-span-2">{event.instructor}</span>
-              </div>
-            )}
-            {/* --- END OF NEW BLOCK --- */}
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
+const HOUR_HEIGHT = 56;
+const DAY_START = 8 * 60;
+const DAY_END = 22 * 60;
 
 interface ScheduleViewProps {
-  meetings: Meeting[];
+  blocks: ClassBlock[];
+  now: Date;
 }
 
-export default function ScheduleView({ meetings }: ScheduleViewProps) {
-  const events = transformMeetingsToEvents(meetings);
-  const [isMobile, setIsMobile] = useState(false);
+export default function ScheduleView({ blocks, now }: ScheduleViewProps) {
+  const [openBlock, setOpenBlock] = useState<ClassBlock | null>(null);
+  const closeSheet = useCallback(() => setOpenBlock(null), []);
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const days = useMemo(
+    () =>
+      WEEK_ORDER.filter(
+        (d) =>
+          ["M", "T", "W", "H", "F"].includes(d) ||
+          blocks.some((b) => b.day === d)
+      ),
+    [blocks]
+  );
+
+  const today = dayCodeOf(now);
+  const [selectedDay, setSelectedDay] = useState<string>(() =>
+    days.includes(today) ? today : "M"
+  );
+
+  if (blocks.length === 0) {
+    return (
+      <div className="mt-6 rounded-2xl bg-surface px-6 py-14 text-center shadow-card">
+        <p className="text-lg font-semibold">No classes scheduled</p>
+        <p className="mt-1 text-[15px] text-label-2">
+          This room is open all week.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ height: isMobile ? "600px" : "702px" }}>
-      <Calendar
-        localizer={localizer}
-        events={events}
-        startAccessor="start"
-        endAccessor="end"
-        defaultView={isMobile ? "day" : "week"}
-        views={["week", "day"]}
-        style={{ margin: "20px 0" }}
-        min={new Date(0, 0, 0, 8, 0, 0)}
-        max={new Date(0, 0, 0, 23, 0, 0)}
-        toolbar={false}
-        formats={{
-          dayFormat: (date, culture) =>
-            localizer.format(date, isMobile ? "EEE dd" : "EEE", culture),
-          weekdayFormat: (date, culture) =>
-            localizer.format(date, "EEE", culture),
-        }}
-        components={{
-          event: CustomEvent,
-        }}
-        onSelectEvent={(event, e) => e.stopPropagation()}
-        longPressThreshold={10}
-      />
+    <>
+      <div className="md:hidden">
+        <Segmented
+          value={selectedDay}
+          onChange={setSelectedDay}
+          options={days.map((d) => ({ value: d, label: DAY_NAMES[d].short }))}
+          className="mt-6"
+        />
+        <DayAgenda
+          blocks={blocks.filter((b) => b.day === selectedDay)}
+          isToday={selectedDay === today}
+          nowMins={minutesOf(now)}
+          onOpen={setOpenBlock}
+        />
+      </div>
+      <div className="hidden md:block">
+        <WeekGrid
+          blocks={blocks}
+          days={days}
+          today={today}
+          nowMins={minutesOf(now)}
+          onOpen={setOpenBlock}
+        />
+      </div>
+      <ClassSheet block={openBlock} onClose={closeSheet} />
+    </>
+  );
+}
+
+function courseLabel(block: ClassBlock) {
+  const first = block.courses[0];
+  return first.course_title || `${first.subject}:${first.course_number}`;
+}
+
+function courseCodes(block: ClassBlock) {
+  return block.courses.map((c) => `${c.subject}:${c.course_number}`).join(", ");
+}
+
+// Lay overlapping blocks side by side.
+function layoutDay(dayBlocks: ClassBlock[]) {
+  const sorted = [...dayBlocks].sort((a, b) => a.start - b.start || b.end - a.end);
+  const placed: { block: ClassBlock; lane: number; lanes: number }[] = [];
+  let cluster: { block: ClassBlock; lane: number; lanes: number }[] = [];
+  let laneEnds: number[] = [];
+  let clusterEnd = -1;
+
+  const flush = () => {
+    for (const item of cluster) item.lanes = laneEnds.length;
+    placed.push(...cluster);
+    cluster = [];
+    laneEnds = [];
+  };
+
+  for (const block of sorted) {
+    if (block.start >= clusterEnd) flush();
+    let lane = laneEnds.findIndex((end) => end <= block.start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(block.end);
+    } else {
+      laneEnds[lane] = block.end;
+    }
+    cluster.push({ block, lane, lanes: 1 });
+    clusterEnd = Math.max(clusterEnd, block.end);
+  }
+  flush();
+  return placed;
+}
+
+function WeekGrid({
+  blocks,
+  days,
+  today,
+  nowMins,
+  onOpen,
+}: {
+  blocks: ClassBlock[];
+  days: string[];
+  today: string;
+  nowMins: number;
+  onOpen: (b: ClassBlock) => void;
+}) {
+  const startHour = Math.min(8, Math.floor(Math.min(...blocks.map((b) => b.start)) / 60));
+  const endHour = Math.max(18, Math.ceil(Math.max(...blocks.map((b) => b.end)) / 60));
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
+  const height = (endHour - startHour) * HOUR_HEIGHT;
+  const toY = (mins: number) => ((mins - startHour * 60) / 60) * HOUR_HEIGHT;
+  const showNow = nowMins >= startHour * 60 && nowMins <= endHour * 60;
+  const columns = { gridTemplateColumns: `3.5rem repeat(${days.length}, minmax(0, 1fr))` };
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-2xl bg-surface shadow-card">
+      <div className="grid border-b border-separator" style={columns}>
+        <div />
+        {days.map((d) => (
+          <div
+            key={d}
+            className={`py-3 text-center text-[13px] font-semibold ${
+              d === today ? "text-tint" : "text-label-2"
+            }`}
+          >
+            {DAY_NAMES[d].short}
+          </div>
+        ))}
+      </div>
+
+      <div className="relative grid py-3" style={columns}>
+        <div className="relative" style={{ height }}>
+          {hours.map((h) => (
+            <span
+              key={h}
+              className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-label-3"
+              style={{ top: toY(h * 60) }}
+            >
+              {formatTime(h * 60).replace(":00", "")}
+            </span>
+          ))}
+        </div>
+
+        {days.map((d) => (
+          <div
+            key={d}
+            className={`relative border-l border-separator ${
+              d === today ? "bg-tint-soft/30" : ""
+            }`}
+            style={{ height }}
+          >
+            {hours.map((h) => (
+              <div
+                key={h}
+                className="absolute inset-x-0 border-t border-separator"
+                style={{ top: toY(h * 60) }}
+              />
+            ))}
+
+            {layoutDay(blocks.filter((b) => b.day === d)).map(
+              ({ block, lane, lanes }) => {
+                const top = toY(block.start);
+                const h = Math.max(toY(block.end) - top, 22);
+                return (
+                  <button
+                    key={block.key}
+                    type="button"
+                    onClick={() => onOpen(block)}
+                    title={`${courseLabel(block)} · ${formatRange(block.start, block.end)}`}
+                    className="absolute overflow-hidden rounded-md border-l-[3px] border-tint bg-tint-soft px-1.5 py-1 text-left text-tint transition-[filter] hover:brightness-95 dark:hover:brightness-125"
+                    style={{
+                      top: top + 1,
+                      height: h - 2,
+                      left: `calc(${(lane / lanes) * 100}% + 2px)`,
+                      width: `calc(${100 / lanes}% - 4px)`,
+                    }}
+                  >
+                    <p
+                      className={`text-[11.5px] font-semibold leading-tight ${
+                        h < 52 ? "line-clamp-1" : "line-clamp-2"
+                      }`}
+                    >
+                      {courseLabel(block)}
+                    </p>
+                    {h >= 40 && (
+                      <p className="mt-0.5 truncate text-[10.5px] opacity-75">
+                        {formatRange(block.start, block.end)}
+                      </p>
+                    )}
+                  </button>
+                );
+              }
+            )}
+
+            {d === today && showNow && (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-busy-dot"
+                style={{ top: toY(nowMins) }}
+              >
+                <span className="absolute -left-1 -top-[5px] size-2 rounded-full bg-busy-dot" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+type AgendaItem =
+  | { kind: "class"; start: number; end: number; block: ClassBlock }
+  | { kind: "free"; start: number; end: number };
+
+function DayAgenda({
+  blocks,
+  isToday,
+  nowMins,
+  onOpen,
+}: {
+  blocks: ClassBlock[];
+  isToday: boolean;
+  nowMins: number;
+  onOpen: (b: ClassBlock) => void;
+}) {
+  const sorted = [...blocks].sort((a, b) => a.start - b.start);
+  const items: AgendaItem[] = [];
+  let cursor = Math.min(DAY_START, sorted[0]?.start ?? DAY_START);
+  for (const block of sorted) {
+    if (block.start - cursor >= 10) {
+      items.push({ kind: "free", start: cursor, end: block.start });
+    }
+    items.push({ kind: "class", start: block.start, end: block.end, block });
+    cursor = Math.max(cursor, block.end);
+  }
+  const dayEnd = Math.max(DAY_END, cursor);
+  if (dayEnd - cursor >= 10) {
+    items.push({ kind: "free", start: cursor, end: dayEnd });
+  }
+
+  return (
+    <ul className="mt-4 overflow-hidden rounded-2xl bg-surface shadow-card">
+      {items.map((item) => {
+        const isNow = isToday && item.start <= nowMins && nowMins < item.end;
+        const times = (
+          <div className="w-[4.5rem] shrink-0 text-[13px] tabular-nums leading-tight">
+            <p className="font-medium">{formatTime(item.start)}</p>
+            <p className="mt-0.5 text-label-3">{formatTime(item.end)}</p>
+          </div>
+        );
+
+        if (item.kind === "free") {
+          return (
+            <li
+              key={`free-${item.start}`}
+              className="flex items-center gap-3 border-b border-separator px-4 py-3 last:border-b-0"
+            >
+              {times}
+              <div className="flex flex-1 items-center gap-2">
+                <span className="size-2 rounded-full bg-ok-dot" />
+                <span className="text-[15px] text-ok">Free</span>
+                <span className="text-[13px] text-label-3">
+                  {formatDuration(item.end - item.start)}
+                </span>
+              </div>
+              {isNow && <NowBadge />}
+            </li>
+          );
+        }
+
+        return (
+          <li key={item.block.key} className="border-b border-separator last:border-b-0">
+            <button
+              type="button"
+              onClick={() => onOpen(item.block)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-fill"
+            >
+              {times}
+              <span className="w-[3px] self-stretch rounded-full bg-tint" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-medium">
+                  {courseLabel(item.block)}
+                </p>
+                <p className="truncate text-[13px] text-label-2">
+                  {courseCodes(item.block)}
+                </p>
+              </div>
+              {isNow ? (
+                <NowBadge />
+              ) : (
+                <LuChevronRight className="size-4 shrink-0 text-label-3" />
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function NowBadge() {
+  return (
+    <span className="shrink-0 rounded-full bg-tint px-2 py-0.5 text-[11px] font-semibold text-white">
+      Now
+    </span>
   );
 }
