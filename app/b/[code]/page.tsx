@@ -13,6 +13,7 @@ import {
 import BackButton from "@/components/BackButton";
 import RoomRow from "@/components/RoomRow";
 import WhenPicker from "@/components/WhenPicker";
+import { fetchRecentReports, reportKey } from "@/lib/reports";
 import { ListSkeleton, Message } from "@/components/States";
 
 export default function BuildingPage() {
@@ -33,6 +34,7 @@ function Building() {
 
   const building = useAsync(() => fetchBuilding(code), [code]);
   const names = useAsync(fetchBuildingNames, []);
+  const reports = useAsync(fetchRecentReports, []);
   const name = names.data?.get(code);
   const campus = CAMPUSES.find((c) => c.id === building.data?.campus);
 
@@ -97,6 +99,7 @@ function Building() {
                 status={r.status}
                 when={when}
                 now={now}
+                reports={reports.data?.get(reportKey(code, r.room))}
               />
             ))}
           </ul>

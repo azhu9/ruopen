@@ -66,6 +66,52 @@
     var(--font-inter), "Segoe UI", system-ui, sans-serif;
 }
 
+/* Building pins on the campus map (Leaflet divIcons). */
+.map-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font: 600 12px/1.2 var(--font-sans);
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--label-2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+.map-pin b {
+  color: var(--label);
+}
+.map-pin[data-state="free"] {
+  background: var(--ok-dot);
+  color: #fff;
+}
+.map-pin[data-state="free"] b {
+  color: #fff;
+}
+.dark .map-pin[data-state="free"] {
+  color: #000;
+}
+.dark .map-pin[data-state="free"] b {
+  color: #000;
+}
+.map-pin[data-state="selected"] {
+  background: var(--tint);
+  color: #fff;
+  transform: translate(-50%, -50%) scale(1.12);
+}
+.map-pin[data-state="selected"] b {
+  color: #fff;
+}
+.map-compact .map-pin:not([data-state="selected"]) b {
+  display: none;
+}
+.leaflet-container {
+  font-family: var(--font-sans);
+}
+
 @layer base {
   html {
     color-scheme: light;

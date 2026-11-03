@@ -8,12 +8,12 @@ import {
   DAY_NAMES,
   DAY_START,
   WEEK_ORDER,
-  dayCodeOf,
   formatDuration,
   formatRange,
   formatTime,
   minutesOf,
 } from "@/lib/schedule";
+import { scheduleDayOf } from "@/lib/calendar";
 import ClassSheet from "./ClassSheet";
 import Segmented from "./Segmented";
 
@@ -40,7 +40,7 @@ export default function ScheduleView({ blocks, now, initialDay }: ScheduleViewPr
     [blocks]
   );
 
-  const today = dayCodeOf(now);
+  const today = scheduleDayOf(now);
   const [selectedDay, setSelectedDay] = useState<string>(() =>
     days.includes(initialDay) ? initialDay : "M"
   );

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import AppNav from "@/components/AppNav";
 import Footer from "@/components/Footer";
+import ServiceWorker from "@/components/ServiceWorker";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
   title: "RU Open",
   description:
     "Find free classrooms and study spaces across Rutgers University-New Brunswick",
+  appleWebApp: { capable: true, title: "RU Open", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -44,6 +46,7 @@ export default function RootLayout({
           </main>
           <Footer />
         </div>
+        <ServiceWorker />
       </body>
     </html>
   );

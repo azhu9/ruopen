@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LuChevronRight } from "react-icons/lu";
+import { LuChevronRight, LuLock } from "react-icons/lu";
 import { ClassBlock, minutesOf } from "@/lib/schedule";
 import { Availability, When, whenDay, whenQuery } from "@/lib/when";
 import StatusLabel from "./StatusLabel";
@@ -18,6 +18,7 @@ export default function RoomRow({
   when,
   now,
   showBuilding = false,
+  reports = 0,
 }: {
   code: string;
   room: string;
@@ -26,6 +27,7 @@ export default function RoomRow({
   when: When;
   now: Date;
   showBuilding?: boolean;
+  reports?: number;
 }) {
   return (
     <li className="group">
@@ -36,8 +38,16 @@ export default function RoomRow({
         <span className="flex min-w-0 flex-1 items-center gap-3 border-b border-separator py-3 pr-3 group-last:border-b-0">
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline justify-between gap-3">
-              <span className="truncate text-[17px]">
-                {showBuilding ? `${code} ${room}` : `Room ${room}`}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[17px]">
+                  {showBuilding ? `${code} ${room}` : `Room ${room}`}
+                </span>
+                {reports > 0 && (
+                  <LuLock
+                    className="size-3.5 shrink-0 text-partial"
+                    aria-label={`Reported locked ${reports} ${reports === 1 ? "time" : "times"} this week`}
+                  />
+                )}
               </span>
               <StatusLabel status={status} className="shrink-0 text-right" />
             </span>

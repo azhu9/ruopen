@@ -11,6 +11,10 @@ import BackButton from "@/components/BackButton";
 import ScheduleView from "@/components/ScheduleView";
 import TimelineBar from "@/components/TimelineBar";
 import WhenPicker from "@/components/WhenPicker";
+import { LockedReport, ShareButton } from "@/components/RoomActions";
+import { DayBanner } from "@/components/Notices";
+import { dayNotice } from "@/lib/calendar";
+import { fetchRecentReports, reportKey } from "@/lib/reports";
 import { ListSkeleton, Message } from "@/components/States";
 
 export default function RoomPage() {
@@ -21,7 +25,11 @@ export default function RoomPage() {
   );
 }
 
-const HERO_COLORS = { free: "text-ok", partial: "text-partial", busy: "text-label" };
+const HERO_COLORS = {
+  free: "text-ok",
+  partial: "text-partial",
+  busy: "text-label",
+};
 
 function Room() {
   const router = useRouter();
@@ -36,8 +44,9 @@ function Room() {
 
   const building = useAsync(() => fetchBuilding(code), [code]);
   const names = useAsync(fetchBuildingNames, []);
+  const reports = useAsync(fetchRecentReports, []);
   const entry = building.data?.rooms.find(
-    (r) => r.room.toLowerCase() === roomParam.toLowerCase()
+    (r) => r.room.toLowerCase() === roomParam.toLowerCase(),
   );
   const room = entry?.room ?? roomParam;
 
@@ -48,30 +57,44 @@ function Room() {
   const status = entry && availability(entry.blocks, when, now);
   const saved = isSaved(code, room);
   const day = whenDay(when, now);
+  const buildingName = names.data?.get(code) ?? code;
+  const notice = when.mode === "now" ? dayNotice(now) : null;
 
   return (
     <div className="pt-4">
       <div className="flex items-center justify-between">
-        <BackButton label={code} fallback={`/b/${encodeURIComponent(code)}${whenQuery(when)}`} />
+        <BackButton
+          label={code}
+          fallback={`/b/${encodeURIComponent(code)}${whenQuery(when)}`}
+        />
         {entry && (
-          <button
-            type="button"
-            onClick={() => toggle(code, room)}
-            aria-pressed={saved}
-            aria-label={saved ? "Remove from saved" : "Save room"}
-            className={`grid size-10 place-items-center rounded-full transition-colors hover:bg-fill ${
-              saved ? "text-tint" : "text-label-2"
-            }`}
-          >
-            <LuStar className="size-[22px]" fill={saved ? "currentColor" : "none"} />
-          </button>
+          <div className="flex items-center">
+            <ShareButton
+              title={`${code} ${room}`}
+              text={`Room ${room}, ${buildingName}${status ? ` · ${status.text}` : ""}`}
+            />
+            <button
+              type="button"
+              onClick={() => toggle(code, room)}
+              aria-pressed={saved}
+              aria-label={saved ? "Remove from saved" : "Save room"}
+              className={`grid size-10 place-items-center rounded-full transition-colors hover:bg-fill ${
+                saved ? "text-tint" : "text-label-2"
+              }`}
+            >
+              <LuStar
+                className="size-[22px]"
+                fill={saved ? "currentColor" : "none"}
+              />
+            </button>
+          </div>
         )}
       </div>
 
       <h1 className="mt-3 text-[34px] font-semibold leading-tight tracking-tight sm:text-5xl">
         Room {room}
       </h1>
-      <p className="mt-1 text-[15px] text-label-2">{names.data?.get(code) ?? code}</p>
+      <p className="mt-1 text-[15px] text-label-2">{buildingName}</p>
 
       {building.loading ? (
         <div className="mt-6">
@@ -86,6 +109,11 @@ function Room() {
         />
       ) : (
         <>
+          {notice && !notice.upcoming && (
+            <div className="mt-6">
+              <DayBanner notice={notice} />
+            </div>
+          )}
           <div className="mt-6 rounded-2xl bg-surface p-5 shadow-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <p
@@ -99,7 +127,7 @@ function Room() {
                 onChange={(w) =>
                   router.replace(
                     `/b/${encodeURIComponent(code)}/${encodeURIComponent(room)}${whenQuery(w)}`,
-                    { scroll: false }
+                    { scroll: false },
                   )
                 }
               />
@@ -117,6 +145,14 @@ function Room() {
               <span>10 PM</span>
             </div>
           </div>
+
+          {reports.data && (
+            <LockedReport
+              code={code}
+              room={room}
+              count={reports.data.get(reportKey(code, room)) ?? 0}
+            />
+          )}
 
           <ScheduleView
             key={`${code}-${room}-${day}`}

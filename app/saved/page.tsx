@@ -5,6 +5,7 @@ import { useAsync, useNow, useRecents, useSaved } from "@/lib/hooks";
 import { NOW, availability } from "@/lib/when";
 import RoomRow, { roomHref } from "@/components/RoomRow";
 import PlaceRow from "@/components/PlaceRow";
+import { fetchRecentReports, reportKey } from "@/lib/reports";
 import { ListSkeleton } from "@/components/States";
 
 export default function SavedPage() {
@@ -12,6 +13,7 @@ export default function SavedPage() {
   const { saved } = useSaved();
   const { recents } = useRecents();
   const names = useAsync(fetchBuildingNames, []);
+  const reports = useAsync(fetchRecentReports, []);
 
   const codes = [...new Set(saved.map((s) => s.code))];
   const buildings = useAsync(
@@ -55,6 +57,7 @@ export default function SavedPage() {
                 status={r.status}
                 when={NOW}
                 now={now}
+                reports={reports.data?.get(reportKey(r.code, r.room))}
                 showBuilding
               />
             ))}

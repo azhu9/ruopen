@@ -3,12 +3,12 @@ import {
   DAY_END,
   DAY_NAMES,
   DAY_START,
-  dayCodeOf,
   formatDuration,
   formatRange,
   formatTime,
   minutesOf,
 } from "./schedule";
+import { scheduleDayOf } from "./calendar";
 
 // The time a person is looking for a room: right now, or a window on a day.
 export type When =
@@ -65,9 +65,10 @@ export function whenLabel(when: When) {
   return `${DAY_NAMES[when.day].short} ${formatRange(when.from, when.to)}`;
 }
 
-// The day a schedule should open on for this time.
+// Which weekday's classes apply: today's (after breaks and schedule swaps)
+// or the chosen day.
 export function whenDay(when: When, now: Date) {
-  return when.mode === "now" ? dayCodeOf(now) : when.day;
+  return when.mode === "now" ? scheduleDayOf(now) : when.day;
 }
 
 export function sameWhen(a: When, b: When) {
@@ -80,6 +81,8 @@ export interface Availability {
   text: string;
   // Higher sorts first: minutes of free time around the requested time.
   score: number;
+  // For a room in use right now: when it becomes free.
+  freeAt?: number;
 }
 
 function mergedIntervals(blocks: ClassBlock[], day: string) {
@@ -112,6 +115,7 @@ export function availability(
         kind: "busy",
         text: `In use until ${formatTime(current[1])}`,
         score: -(current[1] - t),
+        freeAt: current[1],
       };
     }
     const next = intervals.find(([s]) => s > t);
